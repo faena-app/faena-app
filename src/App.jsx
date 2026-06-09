@@ -376,12 +376,7 @@ export default function App() {
               ))}
               <div>
                 <label style={{fontSize:12,fontWeight:600,color:'#64748b',display:'block',marginBottom:4}}>{t.lunch}</label>
-                <select value={form.lunch} onChange={e=>setForm(f=>({...f,lunch:e.target.value}))} style={inp(false)}>
-                  <option value="0">{t.noBreak}</option>
-                  <option value="30">30 min</option>
-                  <option value="45">45 min</option>
-                  <option value="60">1 {lang==='en'?'hour':'hora'}</option>
-                </select>
+                <input type="number" min="0" value={form.lunch} onChange={e=>setForm(f=>({...f,lunch:e.target.value||'0'}))} onFocus={()=>setFocused('lunch')} onBlur={()=>setFocused(null)} placeholder="0" style={inp(focused==='lunch')} />
               </div>
             </div>
             {hoursDisplay()&&<div style={{background:'#eff6ff',borderRadius:6,padding:'8px 12px',fontSize:13,fontWeight:600,color:'#2563eb'}}>⏱ {hoursDisplay()}</div>}
