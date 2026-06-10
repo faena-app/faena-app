@@ -3,8 +3,7 @@ import { supabase, COMPANY_ID } from './supabase.js'
 
 const PINS = { javier: '1111', jake: '2222' }
 const TAGS = [
-  { en: 'Turf', es: 'Turf' },
-  { en: 'Turf + Putting green', es: 'Turf + Putting green' },
+  { en: 'Synthetic turf', es: 'Turf sintético' },
   { en: 'Putting green', es: 'Putting green' },
   { en: 'Base prep', es: 'Preparación de base' },
   { en: 'Cut & fit', es: 'Corte y ajuste' },
@@ -95,12 +94,6 @@ export default function App() {
   const [selectedTags, setSelectedTags] = useState([0])
   const [focused, setFocused] = useState(null)
   const [editingReport, setEditingReport] = useState(null)
-  const editNetHours = (r) => {
-    if(!r.start_time||!r.end_time) return 0
-    const [sh,sm]=r.start_time.split(':').map(Number)
-    const [eh,em]=r.end_time.split(':').map(Number)
-    return Math.max(0,((eh*60+em)-(sh*60+sm)-parseInt(r.lunch_minutes||0))/60)
-  }
   const [form, setForm] = useState({
     worker_id:'', worker_name:'', city:'', project_number:'', project_address:'',
     date:toISO(new Date()), start:'', end:'', lunch:'0', notes:''
@@ -163,7 +156,7 @@ export default function App() {
 
   const saveEdit = async () => {
     if(!editingReport) return
-    const hours=+editNetHours(editingReport).toFixed(2)
+    const r=editingReport; if(!r.start_time||!r.end_time){alert("Fill in start and end time");return}; const [sh,sm]=r.start_time.split(":").map(Number); const [eh,em]=r.end_time.split(":").map(Number); const hours=+Math.max(0,((eh*60+em)-(sh*60+sm)-parseInt(r.lunch_minutes||0))/60).toFixed(2)
     const worker=workers.find(w=>w.id===editingReport.worker_id)
     const rate=worker?.rate||editingReport.rate
     const editorName=role==='javier'?'Javier':'Jake'
@@ -299,11 +292,11 @@ export default function App() {
           </div>
           <div>
             <label style={{fontSize:12,fontWeight:600,color:'#64748b',display:'block',marginBottom:4}}>Start</label>
-            <input type="time" value={editingReport.start_time||''} onChange={e=>setEditingReport(r=>({...r,start_time:e.target.value}))} style={inp(false)} />
+            <input type="time" value={editingReport.start_time} onChange={e=>setEditingReport(r=>({...r,start_time:e.target.value}))} style={inp(false)} />
           </div>
           <div>
             <label style={{fontSize:12,fontWeight:600,color:'#64748b',display:'block',marginBottom:4}}>End</label>
-            <input type="time" value={editingReport.end_time||''} onChange={e=>setEditingReport(r=>({...r,end_time:e.target.value}))} style={inp(false)} />
+            <input type="time" value={editingReport.end_time} onChange={e=>setEditingReport(r=>({...r,end_time:e.target.value}))} style={inp(false)} />
           </div>
         </div>
         <div style={{marginBottom:12}}>
@@ -382,8 +375,8 @@ export default function App() {
                 </div>
               ))}
               <div>
-                <label style={{fontSize:12,fontWeight:600,color:'#64748b',display:'block',marginBottom:4}}>{t.lunch}</label>
-                <input type="number" min="0" value={form.lunch} onChange={e=>setForm(f=>({...f,lunch:e.target.value||'0'}))} onFocus={()=>setFocused('lunch')} onBlur={()=>setFocused(null)} placeholder="0" style={inp(focused==='lunch')} />
+                <label style={{fontSize:12,fontWeight:600,color:'#64748b',display:'block',marginBottom:4}}>{t.lunch} (min)</label>
+                <input type="number" min="0" max="180" value={form.lunch} onChange={e=>setForm(f=>({...f,lunch:e.target.value||'0'}))} onFocus={()=>setFocused('lunch')} onBlur={()=>setFocused(null)} placeholder="0" style={inp(focused==='lunch')} />
               </div>
             </div>
             {hoursDisplay()&&<div style={{background:'#eff6ff',borderRadius:6,padding:'8px 12px',fontSize:13,fontWeight:600,color:'#2563eb'}}>⏱ {hoursDisplay()}</div>}
@@ -426,7 +419,7 @@ export default function App() {
                   <span style={{fontWeight:600,fontSize:14,color:'#1e293b'}}>{r.worker_name} <span style={{padding:'2px 8px',borderRadius:99,fontSize:11,background:'#f0fdf4',color:'#166534',marginLeft:4}}>{r.reporter}</span></span>
                   <div style={{display:'flex',gap:8,alignItems:'center'}}>
                     <span style={{fontSize:12,color:'#94a3b8'}}>{fmtDateStr(r.date,lang)}</span>
-                    <button onClick={()=>setEditingReport({...r, start_time: r.start_time||'', end_time: r.end_time||'', lunch_minutes: r.lunch_minutes||0})} style={{border:'none',background:'transparent',color:'#94a3b8',cursor:'pointer',fontSize:13,padding:'2px 6px'}}>✏️</button>
+                    <button onClick={()=>setEditingReport({...r})} style={{border:'none',background:'transparent',color:'#94a3b8',cursor:'pointer',fontSize:13,padding:'2px 6px'}}>✏️</button>
                   </div>
                 </div>
                 <div style={{fontSize:13,color:'#64748b',lineHeight:1.6}}>
