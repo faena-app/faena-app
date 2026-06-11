@@ -29,6 +29,8 @@ const T = {
     noReports:'No reports yet.', supervisor:'Supervisor', installer:'Installer',
     downloadPeriod:'Download period', downloadAll:'Download all history',
     loading:'Loading...', saving:'Saving...', error:'Error, please try again.',
+    myReports:'My reports', noMyReports:'You have no reports yet.',
+    rateLabel:'Rate ($/hr)', updateRate:'Update',
     days: d => d===1?'1 day':`${d} days`,
     editedBy: (who, when) => `Edited by ${who} · ${when}`,
   },
@@ -50,6 +52,8 @@ const T = {
     noReports:'Sin reportes aún.', supervisor:'Supervisor', installer:'Installer',
     downloadPeriod:'Descargar período', downloadAll:'Descargar historial completo',
     loading:'Cargando...', saving:'Guardando...', error:'Error, intenta de nuevo.',
+    myReports:'Mis reportes', noMyReports:'Aún no tienes reportes.',
+    rateLabel:'Tarifa ($/hr)', updateRate:'Actualizar',
     days: d => d===1?'1 día':`${d} días`,
     editedBy: (who, when) => `Editado por ${who} · ${when}`,
   }
@@ -94,6 +98,7 @@ export default function App() {
   const [selectedTags, setSelectedTags] = useState([0])
   const [focused, setFocused] = useState(null)
   const [editingReport, setEditingReport] = useState(null)
+  const [editingRate, setEditingRate] = useState({id:null, value:''})
   const [form, setForm] = useState({
     worker_id:'', worker_name:'', city:'', project_number:'', project_address:'',
     date:toISO(new Date()), start:'', end:'', lunch:'0', notes:''
@@ -141,8 +146,8 @@ export default function App() {
     setLoading(true)
     const { error } = await supabase.from('reports').insert({
       company_id:COMPANY_ID, worker_id:form.worker_id, worker_name:form.worker_name,
-      reporter, project_city:form.city, project_number:form.project_number,
-      project_address:form.project_address, date:form.date, start_time:form.start,
+      reporter, project_city:form.city.trim(), project_number:form.project_number.trim(),
+      project_address:form.project_address?.trim(), date:form.date, start_time:form.start,
       end_time:form.end, lunch_minutes:parseInt(form.lunch||0), hours, rate, pay:+(hours*rate).toFixed(2),
       tags:selectedTags.map(i=>TAGS[i].en), notes:form.notes
     })
@@ -192,6 +197,12 @@ export default function App() {
 
   const toggleWorker = async (id, active) => {
     await supabase.from('workers').update({active:!active}).eq('id',id)
+    loadWorkers()
+  }
+
+  const updateRate = async (id, rate) => {
+    await supabase.from('workers').update({rate:parseFloat(rate)||18}).eq('id',id)
+    setEditingRate({id:null,value:''})
     loadWorkers()
   }
 
@@ -326,7 +337,11 @@ export default function App() {
       </div>
 
       <div style={{display:'flex',gap:6,marginBottom:'1.5rem',flexWrap:'wrap'}}>
-        {[['register','📋',t.register],['reports','📊',t.reports],['payroll','💵',t.payroll],['team','👥',t.team]].filter(([v])=>v==='register'||isAdmin).map(([v,icon,label])=>(
+        {[['register','📋',t.register],['myreports','📋',t.myReports],['reports','📊',t.reports],['payroll','💵',t.payroll],['team','👥',t.team]].filter(([v])=>{
+          if(v==='register') return true
+          if(v==='myreports') return role==='will'
+          return isAdmin
+        }).map(([v,icon,label])=>(
           <button key={v} onClick={()=>setTab(v)} style={{padding:'8px 14px',borderRadius:8,border:`2px solid ${tab===v?'#2563eb':'#e2e8f0'}`,background:tab===v?'#eff6ff':'transparent',color:tab===v?'#2563eb':'#64748b',fontWeight:tab===v?600:400,fontSize:13,cursor:'pointer'}}>{icon} {label}</button>
         ))}
       </div>
@@ -399,6 +414,28 @@ export default function App() {
 
           <button onClick={submitReport} disabled={loading} style={{width:'100%',padding:13,border:'none',borderRadius:10,background:'#1e293b',color:'#fff',fontSize:15,fontWeight:700,cursor:'pointer',opacity:loading?0.7:1}}>{loading?t.saving:`✓ ${t.submit}`}</button>
         </>
+      )}
+
+      {/* WILL MY REPORTS */}
+      {tab==='myreports'&&role==='will'&&(
+        <div style={card}>
+          <span style={sLabel}>{t.myReports}</span>
+          {reports.filter(r=>r.reporter==='Will').length===0
+            ?<p style={{color:'#94a3b8',textAlign:'center',padding:'1.5rem'}}>{t.noMyReports}</p>
+            :reports.filter(r=>r.reporter==='Will').map((r,i,arr)=>(
+              <div key={r.id} style={{padding:'12px 0',borderBottom:i<arr.length-1?'1px solid #f1f5f9':'none'}}>
+                <div style={{display:'flex',justifyContent:'space-between',marginBottom:4}}>
+                  <span style={{fontWeight:600,fontSize:14,color:'#1e293b'}}>{r.worker_name}</span>
+                  <span style={{fontSize:12,color:'#94a3b8'}}>{fmtDateStr(r.date,lang)}</span>
+                </div>
+                <div style={{fontSize:13,color:'#64748b',lineHeight:1.6}}>
+                  📍 {r.project_city} {r.project_number} · ⏱ {r.hours.toFixed(1)}h
+                  {r.tags?.length>0&&<><br />{r.tags.map((tag,ti)=>{const found=TAGS.find(t=>t.en===tag);return <span key={ti} style={{display:'inline-block',padding:'2px 8px',borderRadius:99,fontSize:11,background:'#eff6ff',color:'#2563eb',marginRight:4,marginTop:2}}>{lang==='en'?tag:(found?found.es:tag)}</span>})}</>}
+                  {r.notes&&<><br /><span style={{color:'#94a3b8',fontStyle:'italic'}}>{r.notes}</span></>}
+                </div>
+              </div>
+            ))}
+        </div>
       )}
 
       {/* REPORTS */}
@@ -504,7 +541,18 @@ export default function App() {
                     <div style={{width:36,height:36,borderRadius:'50%',background:color+'20',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:700,color,flexShrink:0}}>{initials}</div>
                     <div>
                       <div style={{fontSize:14,fontWeight:600,color:'#1e293b'}}>{w.name}</div>
-                      <div style={{fontSize:12,color:'#94a3b8'}}>{w.role==='supervisor'?t.supervisor:t.installer} · <span style={{color:'#16a34a',fontWeight:600}}>${w.rate}/hr</span> · {count} report{count!==1&&lang==='en'?'s':''}</div>
+                      {editingRate.id===w.id
+                        ?<div style={{display:'flex',alignItems:'center',gap:6,marginTop:4}}>
+                          <input type="number" value={editingRate.value} onChange={e=>setEditingRate(r=>({...r,value:e.target.value}))} style={{...inp(false),width:70,padding:'4px 8px',fontSize:13}} />
+                          <button onClick={()=>updateRate(w.id,editingRate.value)} style={{...btn('#16a34a','#fff'),padding:'4px 10px',fontSize:12}}>{t.updateRate}</button>
+                          <button onClick={()=>setEditingRate({id:null,value:''})} style={{...btn('transparent','#94a3b8','1px solid #e2e8f0'),padding:'4px 10px',fontSize:12}}>✕</button>
+                        </div>
+                        :<div style={{fontSize:12,color:'#94a3b8'}}>
+                          {w.role==='supervisor'?t.supervisor:t.installer} · 
+                          <span style={{color:'#16a34a',fontWeight:600,cursor:'pointer'}} onClick={()=>setEditingRate({id:w.id,value:String(w.rate)})}> ${w.rate}/hr ✏️</span>
+                          · {count} report{count!==1&&lang==='en'?'s':''}
+                        </div>
+                      }
                     </div>
                   </div>
                   <button onClick={()=>toggleWorker(w.id,w.active)} style={{padding:'5px 12px',borderRadius:99,border:'2px solid #fee2e2',background:'#fff5f5',color:'#ef4444',fontSize:12,fontWeight:600,cursor:'pointer'}}>{t.deactivate}</button>
