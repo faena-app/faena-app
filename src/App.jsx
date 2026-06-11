@@ -3,7 +3,8 @@ import { supabase, COMPANY_ID } from './supabase.js'
 
 const PINS = { javier: '1111', jake: '2222' }
 const TAGS = [
-  { en: 'Synthetic turf', es: 'Turf sintético' },
+  { en: 'Turf', es: 'Turf' },
+  { en: 'Turf + Putting green', es: 'Turf + Putting green' },
   { en: 'Putting green', es: 'Putting green' },
   { en: 'Base prep', es: 'Preparación de base' },
   { en: 'Cut & fit', es: 'Corte y ajuste' },
