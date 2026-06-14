@@ -32,6 +32,10 @@ const T = {
     loading:'Loading...', saving:'Saving...', error:'Error, please try again.',
     myReports:'My reports', noMyReports:'You have no reports yet.',
     rateLabel:'Rate ($/hr)', updateRate:'Update',
+    insights:'Insights', insightsPeriod:'Period', allTime:'All time',
+    byCity:'Activity by city', byProject:'Cost by project', byWorker:'Hours by worker', weeklyTrend:'Weekly trend',
+    projects:'Projects', avgCostHr:'Avg cost/hr', laborCost:'Labor cost', totalDays:'Days',
+    noData:'No data for this period.',
     days: d => d===1?'1 day':`${d} days`,
     editedBy: (who, when) => `Edited by ${who} · ${when}`,
   },
@@ -55,6 +59,10 @@ const T = {
     loading:'Cargando...', saving:'Guardando...', error:'Error, intenta de nuevo.',
     myReports:'Mis reportes', noMyReports:'Aún no tienes reportes.',
     rateLabel:'Tarifa ($/hr)', updateRate:'Actualizar',
+    insights:'Insights', insightsPeriod:'Período', allTime:'Todo el tiempo',
+    byCity:'Actividad por ciudad', byProject:'Costo por proyecto', byWorker:'Horas por trabajador', weeklyTrend:'Tendencia semanal',
+    projects:'Proyectos', avgCostHr:'Costo prom/hr', laborCost:'Costo de mano de obra', totalDays:'Días',
+    noData:'Sin datos para este período.',
     days: d => d===1?'1 día':`${d} días`,
     editedBy: (who, when) => `Editado por ${who} · ${when}`,
   }
@@ -103,6 +111,7 @@ export default function App() {
   const [editingRate, setEditingRate] = useState({id:null, value:''})
   const [editingWorkerName, setEditingWorkerName] = useState({id:null, value:''})
   const [payrollFilter, setPayrollFilter] = useState('all')
+  const [insightsPeriod, setInsightsPeriod] = useState('month')
   const [form, setForm] = useState({
     worker_id:'', worker_name:'', city:'', project_number:'', project_address:'',
     date:toISO(new Date()), start:'', end:'', lunch:'0', notes:''
@@ -197,7 +206,7 @@ export default function App() {
 
     await supabase.from('reports').update({
       worker_id:editingReport.worker_id, worker_name:editingReport.worker_name,
-      project_city:editingReport.project_city.trim(), project_number:editingReport.project_number.trim(),
+      project_city:editingReport.project_city, project_number:editingReport.project_number,
       project_address:editingReport.project_address, date:editingReport.date,
       start_time:editingReport.start_time, end_time:editingReport.end_time,
       lunch_minutes:editingReport.lunch_minutes, hours, rate, pay:+(hours*rate).toFixed(2),
@@ -359,9 +368,10 @@ export default function App() {
       </div>
 
       <div style={{display:'flex',gap:6,marginBottom:'1.5rem',flexWrap:'wrap'}}>
-        {[['register','📋',t.register],['myreports','📋',t.myReports],['reports','📊',t.reports],['payroll','💵',t.payroll],['team','👥',t.team]].filter(([v])=>{
+        {[['register','📋',t.register],['myreports','📋',t.myReports],['reports','📊',t.reports],['payroll','💵',t.payroll],['insights','💡',t.insights],['team','👥',t.team]].filter(([v])=>{
           if(v==='register') return true
           if(v==='myreports') return role==='will'
+          if(v==='insights') return isAdmin
           return isAdmin
         }).map(([v,icon,label])=>(
           <button key={v} onClick={()=>setTab(v)} style={{padding:'8px 14px',borderRadius:8,border:`2px solid ${tab===v?'#2563eb':'#e2e8f0'}`,background:tab===v?'#eff6ff':'transparent',color:tab===v?'#2563eb':'#64748b',fontWeight:tab===v?600:400,fontSize:13,cursor:'pointer'}}>{icon} {label}</button>
@@ -554,6 +564,159 @@ export default function App() {
           </div>
         </>
       )}
+
+      {/* INSIGHTS */}
+      {tab==='insights'&&isAdmin&&(()=>{
+        const now = new Date()
+        const getFrom = () => {
+          if(insightsPeriod==='week') { const d=getMonday(0); return toISO(d) }
+          if(insightsPeriod==='month') { return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01` }
+          if(insightsPeriod==='year') { return `${now.getFullYear()}-01-01` }
+          return '2000-01-01'
+        }
+        const fromDate = getFrom()
+        const insReports = reports.filter(r=>r.date>=fromDate && r.hours>0)
+
+        // By city
+        const byCity = {}
+        insReports.forEach(r=>{
+          const k=r.project_city
+          if(!byCity[k]) byCity[k]={city:k,projects:new Set(),hours:0,cost:0}
+          byCity[k].projects.add(r.project_city+r.project_number)
+          byCity[k].hours+=r.hours
+          byCity[k].cost+=r.pay
+        })
+        const cityArr = Object.values(byCity).sort((a,b)=>b.cost-a.cost)
+        const maxCityCost = cityArr[0]?.cost||1
+
+        // By project
+        const byProject = {}
+        insReports.forEach(r=>{
+          const k=r.project_city+' '+r.project_number
+          if(!byProject[k]) byProject[k]={name:k,days:new Set(),hours:0,cost:0,workers:new Set()}
+          byProject[k].days.add(r.date)
+          byProject[k].hours+=r.hours
+          byProject[k].cost+=r.pay
+          byProject[k].workers.add(r.worker_name)
+        })
+        const projArr = Object.values(byProject).sort((a,b)=>b.cost-a.cost)
+
+        // By worker
+        const byWorker = {}
+        insReports.forEach(r=>{
+          if(!byWorker[r.worker_name]) byWorker[r.worker_name]={name:r.worker_name,hours:0,cost:0}
+          byWorker[r.worker_name].hours+=r.hours
+          byWorker[r.worker_name].cost+=r.pay
+        })
+        const workerArr = Object.values(byWorker).sort((a,b)=>b.hours-a.hours)
+        const maxWorkerHours = workerArr[0]?.hours||1
+
+        // Weekly trend (last 8 weeks)
+        const weeklyData = []
+        for(let i=7;i>=0;i--){
+          const mon=getMonday(-i)
+          const fri=new Date(mon); fri.setDate(fri.getDate()+6)
+          const wReports=reports.filter(r=>r.date>=toISO(mon)&&r.date<=toISO(fri)&&r.hours>0)
+          const label=mon.toLocaleDateString(lang==='es'?'es-MX':'en-US',{month:'short',day:'numeric'})
+          weeklyData.push({label,hours:+wReports.reduce((a,r)=>a+r.hours,0).toFixed(1),cost:+wReports.reduce((a,r)=>a+r.pay,0).toFixed(2)})
+        }
+        const maxWeeklyHours = Math.max(...weeklyData.map(w=>w.hours))||1
+
+        const totalHoursIns = insReports.reduce((a,r)=>a+r.hours,0)
+        const totalCostIns = insReports.reduce((a,r)=>a+r.pay,0)
+        const totalProjects = Object.keys(byProject).length
+
+        return <>
+          {/* Period selector */}
+          <div style={{display:'flex',gap:6,marginBottom:16}}>
+            {[['week',lang==='en'?'This week':'Esta semana'],['month',lang==='en'?'This month':'Este mes'],['year',lang==='en'?'This year':'Este año'],['all',lang==='en'?'All time':'Todo']].map(([v,label])=>(
+              <button key={v} onClick={()=>setInsightsPeriod(v)} style={{padding:'7px 14px',borderRadius:8,border:`2px solid ${insightsPeriod===v?'#2563eb':'#e2e8f0'}`,background:insightsPeriod===v?'#eff6ff':'transparent',color:insightsPeriod===v?'#2563eb':'#64748b',fontWeight:insightsPeriod===v?600:400,fontSize:13,cursor:'pointer'}}>{label}</button>
+            ))}
+          </div>
+
+          {/* KPIs */}
+          <div style={{display:'flex',gap:10,marginBottom:14}}>
+            {[[totalProjects,lang==='en'?'Projects':'Proyectos','#7c3aed'],[totalHoursIns.toFixed(1)+'h',lang==='en'?'Total hours':'Horas totales','#0d9488'],['$'+totalCostIns.toFixed(2),lang==='en'?'Labor cost':'Costo mano de obra','#16a34a']].map(([val,lbl,color],i)=>(
+              <div key={i} style={statBox(color)}><div style={{fontSize:20,fontWeight:700,color}}>{val}</div><div style={{fontSize:12,color:'#64748b',marginTop:2}}>{lbl}</div></div>
+            ))}
+          </div>
+
+          {/* Weekly trend */}
+          <div style={card}>
+            <span style={sLabel}>{lang==='en'?'Weekly trend (hours)':'Tendencia semanal (horas)'}</span>
+            <div style={{display:'flex',alignItems:'flex-end',gap:6,height:120}}>
+              {weeklyData.map((w,i)=>(
+                <div key={i} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:4}}>
+                  <div style={{fontSize:10,color:'#64748b',fontWeight:600}}>{w.hours>0?w.hours:''}</div>
+                  <div style={{width:'100%',background:w.hours>0?'#2563eb':'#e2e8f0',borderRadius:'4px 4px 0 0',height:`${Math.max((w.hours/maxWeeklyHours)*90,w.hours>0?8:2)}px`,transition:'height 0.3s'}}></div>
+                  <div style={{fontSize:9,color:'#94a3b8',textAlign:'center',lineHeight:1.2}}>{w.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* By city - heatmap style */}
+          <div style={card}>
+            <span style={sLabel}>{lang==='en'?'Activity by city':'Actividad por ciudad'}</span>
+            {cityArr.length===0?<p style={{color:'#94a3b8',fontSize:13}}>{t.noData}</p>:
+            cityArr.map((c,i)=>(
+              <div key={i} style={{marginBottom:10}}>
+                <div style={{display:'flex',justifyContent:'space-between',marginBottom:4}}>
+                  <span style={{fontSize:13,fontWeight:600,color:'#1e293b'}}>📍 {c.city}</span>
+                  <div style={{display:'flex',gap:16}}>
+                    <span style={{fontSize:12,color:'#64748b'}}>{c.projects.size} {lang==='en'?'project':'proyecto'}{c.projects.size!==1?'s':''}</span>
+                    <span style={{fontSize:12,color:'#64748b'}}>{c.hours.toFixed(1)}h</span>
+                    <span style={{fontSize:13,fontWeight:600,color:'#16a34a'}}>${c.cost.toFixed(0)}</span>
+                  </div>
+                </div>
+                <div style={{height:8,background:'#f1f5f9',borderRadius:99}}>
+                  <div style={{height:8,background:`hsl(${220-Math.round((c.cost/maxCityCost)*60)},70%,50%)`,borderRadius:99,width:`${Math.max((c.cost/maxCityCost)*100,3)}%`,transition:'width 0.4s'}}></div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* By project */}
+          <div style={card}>
+            <span style={sLabel}>{lang==='en'?'Cost by project':'Costo por proyecto'}</span>
+            {projArr.length===0?<p style={{color:'#94a3b8',fontSize:13}}>{t.noData}</p>:
+            projArr.map((p,i,arr)=>(
+              <div key={i} style={{padding:'10px 0',borderBottom:i<arr.length-1?'1px solid #f1f5f9':'none'}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:3}}>
+                  <span style={{fontSize:14,fontWeight:600,color:'#1e293b'}}>📍 {p.name}</span>
+                  <span style={{fontSize:14,fontWeight:700,color:'#16a34a'}}>${p.cost.toFixed(2)}</span>
+                </div>
+                <div style={{display:'flex',gap:16,fontSize:12,color:'#64748b'}}>
+                  <span>⏱ {p.hours.toFixed(1)}h</span>
+                  <span>📅 {p.days.size} {lang==='en'?'day':'día'}{p.days.size!==1?'s':''}</span>
+                  <span>👷 {p.workers.size} {lang==='en'?'worker':'trabajador'}{p.workers.size!==1?(lang==='en'?'s':'es'):''}</span>
+                  <span style={{color:'#7c3aed'}}>~${(p.cost/p.hours).toFixed(2)}/hr</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* By worker */}
+          <div style={card}>
+            <span style={sLabel}>{lang==='en'?'Hours by worker':'Horas por trabajador'}</span>
+            {workerArr.length===0?<p style={{color:'#94a3b8',fontSize:13}}>{t.noData}</p>:
+            workerArr.map((w,i)=>(
+              <div key={i} style={{marginBottom:10}}>
+                <div style={{display:'flex',justifyContent:'space-between',marginBottom:4}}>
+                  <span style={{fontSize:13,fontWeight:600,color:'#1e293b'}}>{w.name}</span>
+                  <div style={{display:'flex',gap:16}}>
+                    <span style={{fontSize:13,fontWeight:600,color:'#0d9488'}}>{w.hours.toFixed(1)}h</span>
+                    <span style={{fontSize:12,color:'#64748b'}}>${w.cost.toFixed(2)}</span>
+                  </div>
+                </div>
+                <div style={{height:6,background:'#f1f5f9',borderRadius:99}}>
+                  <div style={{height:6,background:'#0d9488',borderRadius:99,width:`${Math.max((w.hours/maxWorkerHours)*100,2)}%`,transition:'width 0.4s'}}></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      })()}
 
       {/* TEAM */}
       {tab==='team'&&isAdmin&&(
