@@ -197,7 +197,7 @@ export default function App() {
 
     await supabase.from('reports').update({
       worker_id:editingReport.worker_id, worker_name:editingReport.worker_name,
-      project_city:editingReport.project_city, project_number:editingReport.project_number,
+      project_city:editingReport.project_city.trim(), project_number:editingReport.project_number.trim(),
       project_address:editingReport.project_address, date:editingReport.date,
       start_time:editingReport.start_time, end_time:editingReport.end_time,
       lunch_minutes:editingReport.lunch_minutes, hours, rate, pay:+(hours*rate).toFixed(2),
