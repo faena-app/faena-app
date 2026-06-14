@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react'
 import { supabase, COMPANY_ID } from './supabase.js'
 
 const PINS = { javier: '1111', jake: '2222' }
-const TAGS = [
-  { en: 'Synthetic turf', es: 'Turf sintético' },
+const TAGS_FALLBACK = [
+  { en: 'Turf', es: 'Turf' },
+  { en: 'Turf + Putting green', es: 'Turf + Putting green' },
   { en: 'Putting green', es: 'Putting green' },
   { en: 'Base prep', es: 'Preparación de base' },
   { en: 'Cut & fit', es: 'Corte y ajuste' },
@@ -86,6 +87,7 @@ export default function App() {
   const [tab, setTab] = useState('register')
   const [workers, setWorkers] = useState([])
   const [reports, setReports] = useState([])
+  const [tags, setTags] = useState(TAGS_FALLBACK)
   const [loading, setLoading] = useState(false)
   const [banner, setBanner] = useState('')
   const [weekOffset, setWeekOffset] = useState(0)
@@ -112,7 +114,12 @@ export default function App() {
     setPayFrom(toISO(mon)); setPayTo(toISO(end))
   }, [weekOffset, satIncluded])
 
-  useEffect(() => { if(role) { loadWorkers(); loadReports() } }, [role])
+  useEffect(() => { if(role) { loadWorkers(); loadReports(); loadTags() } }, [role])
+
+  const loadTags = async () => {
+    const { data } = await supabase.from('work_types').select('*').eq('company_id', COMPANY_ID).eq('active', true).order('created_at')
+    if(data && data.length > 0) setTags(data.map(t=>({en:t.name_en, es:t.name_es})))
+  }
 
   const loadWorkers = async () => {
     const { data } = await supabase.from('workers').select('*').eq('company_id', COMPANY_ID).order('name')
@@ -156,7 +163,7 @@ export default function App() {
       reporter, project_city:form.city.trim(), project_number:form.project_number.trim(),
       project_address:form.project_address?.trim(), date:form.date, start_time:form.start,
       end_time:form.end, lunch_minutes:parseInt(form.lunch||0), hours, rate, pay:+(hours*rate).toFixed(2),
-      tags:selectedTags.map(i=>TAGS[i].en), notes:form.notes
+      tags:selectedTags.map(i=>tags[i].en), notes:form.notes
     })
     setLoading(false)
     if(error){ alert(t.error); return }
@@ -415,7 +422,7 @@ export default function App() {
           <div style={card}>
             <span style={sLabel}>{t.workType}</span>
             <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
-              {TAGS.map((tag,i)=>(
+              {tags.map((tag,i)=>(
                 <div key={i} onClick={()=>setSelectedTags(p=>p.includes(i)?p.filter(x=>x!==i):[...p,i])}
                   style={{padding:'7px 16px',borderRadius:99,border:`2px solid ${selectedTags.includes(i)?'#2563eb':'#e2e8f0'}`,fontSize:13,cursor:'pointer',fontWeight:selectedTags.includes(i)?600:400,color:selectedTags.includes(i)?'#2563eb':'#64748b',background:selectedTags.includes(i)?'#eff6ff':'#fafafa',transition:'all 0.15s'}}>{lang==='en'?tag.en:tag.es}</div>
               ))}
@@ -445,7 +452,7 @@ export default function App() {
                 </div>
                 <div style={{fontSize:13,color:'#64748b',lineHeight:1.6}}>
                   📍 {r.project_city} {r.project_number} · ⏱ {r.hours.toFixed(1)}h
-                  {r.tags?.length>0&&<><br />{r.tags.map((tag,ti)=>{const found=TAGS.find(t=>t.en===tag);return <span key={ti} style={{display:'inline-block',padding:'2px 8px',borderRadius:99,fontSize:11,background:'#eff6ff',color:'#2563eb',marginRight:4,marginTop:2}}>{lang==='en'?tag:(found?found.es:tag)}</span>})}</>}
+                  {r.tags?.length>0&&<><br />{r.tags.map((tag,ti)=>{const found=tags.find(t=>t.en===tag);return <span key={ti} style={{display:'inline-block',padding:'2px 8px',borderRadius:99,fontSize:11,background:'#eff6ff',color:'#2563eb',marginRight:4,marginTop:2}}>{lang==='en'?tag:(found?found.es:tag)}</span>})}</>}
                   {r.notes&&<><br /><span style={{color:'#94a3b8',fontStyle:'italic'}}>{r.notes}</span></>}
                 </div>
               </div>
@@ -476,7 +483,7 @@ export default function App() {
                 </div>
                 <div style={{fontSize:13,color:'#64748b',lineHeight:1.6}}>
                   📍 {r.project_city} {r.project_number} · ⏱ {r.hours.toFixed(1)}h · <span style={{color:'#16a34a',fontWeight:600}}>${r.pay.toFixed(2)}</span>
-                  {r.tags?.length>0&&<><br />{r.tags.map((tag,ti)=>{const found=TAGS.find(t=>t.en===tag);return <span key={ti} style={{display:'inline-block',padding:'2px 8px',borderRadius:99,fontSize:11,background:'#eff6ff',color:'#2563eb',marginRight:4,marginTop:2}}>{lang==='en'?tag:(found?found.es:tag)}</span>})}</>}
+                  {r.tags?.length>0&&<><br />{r.tags.map((tag,ti)=>{const found=tags.find(t=>t.en===tag);return <span key={ti} style={{display:'inline-block',padding:'2px 8px',borderRadius:99,fontSize:11,background:'#eff6ff',color:'#2563eb',marginRight:4,marginTop:2}}>{lang==='en'?tag:(found?found.es:tag)}</span>})}</>}
                   {r.notes&&<><br /><span style={{color:'#94a3b8',fontStyle:'italic'}}>{r.notes}</span></>}
                 </div>
               </div>
