@@ -3,8 +3,7 @@ import { supabase, COMPANY_ID } from './supabase.js'
 
 const PINS = { javier: '1111', jake: '2222' }
 const TAGS = [
-  { en: 'Turf', es: 'Turf' },
-  { en: 'Turf + Putting green', es: 'Turf + Putting green' },
+  { en: 'Synthetic turf', es: 'Turf sintético' },
   { en: 'Putting green', es: 'Putting green' },
   { en: 'Base prep', es: 'Preparación de base' },
   { en: 'Cut & fit', es: 'Corte y ajuste' },
@@ -100,6 +99,8 @@ export default function App() {
   const [focused, setFocused] = useState(null)
   const [editingReport, setEditingReport] = useState(null)
   const [editingRate, setEditingRate] = useState({id:null, value:''})
+  const [editingWorkerName, setEditingWorkerName] = useState({id:null, value:''})
+  const [payrollFilter, setPayrollFilter] = useState('all')
   const [form, setForm] = useState({
     worker_id:'', worker_name:'', city:'', project_number:'', project_address:'',
     date:toISO(new Date()), start:'', end:'', lunch:'0', notes:''
@@ -140,7 +141,12 @@ export default function App() {
 
   const submitReport = async () => {
     if(!form.worker_id||!form.city||!form.project_number||!form.date||!form.start||!form.end){ alert(t.fill); return }
-    const hours=+netHours().toFixed(2)
+    const [sh,sm]=form.start.split(':').map(Number)
+    const [eh,em]=form.end.split(':').map(Number)
+    const totalMins=(eh*60+em)-(sh*60+sm)-parseInt(form.lunch||0)
+    if((eh*60+em)<=(sh*60+sm)){ alert(lang==='en'?'End time must be after start time.':'La hora de fin debe ser después del inicio.'); return }
+    if(totalMins<=0){ alert(lang==='en'?'Total hours cannot be 0. Please check your times.':'Las horas totales no pueden ser 0. Revisa los horarios.'); return }
+    const hours=+(totalMins/60).toFixed(2)
     const worker=workers.find(w=>w.id===form.worker_id)
     const rate=worker?.rate||18
     const reporter=role==='will'?'Will':role==='javier'?'Javier':'Jake'
@@ -207,6 +213,13 @@ export default function App() {
     loadWorkers()
   }
 
+  const updateWorkerName = async (id, name) => {
+    if(!name.trim()) return
+    await supabase.from('workers').update({name:name.trim()}).eq('id',id)
+    setEditingWorkerName({id:null,value:''})
+    loadWorkers()
+  }
+
   const addWorker = async () => {
     if(!newName.trim()) return
     if(workers.find(w=>w.name.toLowerCase()===newName.toLowerCase())){ alert(t.exists); return }
@@ -224,7 +237,8 @@ export default function App() {
   const filteredReports = reports.filter(r=>r.date>=payFrom&&r.date<=payTo)
   const payrollByWorker = () => {
     const bw={}
-    filteredReports.forEach(r=>{
+    const filtered = payrollFilter==='all' ? filteredReports : filteredReports.filter(r=>r.worker_name===payrollFilter)
+    filtered.forEach(r=>{
       if(!bw[r.worker_name]) bw[r.worker_name]={lines:[],totalHours:0,totalPay:0,rate:r.rate}
       bw[r.worker_name].lines.push(r)
       bw[r.worker_name].totalHours+=r.hours
@@ -483,6 +497,13 @@ export default function App() {
             ))}
             <button onClick={()=>setSatIncluded(s=>!s)} style={{padding:'8px 14px',borderRadius:8,border:`2px solid ${satIncluded?'#d97706':'#e2e8f0'}`,background:satIncluded?'#fffbeb':'transparent',color:satIncluded?'#d97706':'#64748b',fontSize:13,fontWeight:satIncluded?600:400,cursor:'pointer'}}>{satIncluded?t.satOn:t.satOff}</button>
           </div>
+          <div style={{marginBottom:12}}>
+            <label style={{fontSize:12,fontWeight:600,color:'#64748b',display:'block',marginBottom:4}}>{lang==='en'?'Filter by worker':'Filtrar por trabajador'}</label>
+            <select value={payrollFilter} onChange={e=>setPayrollFilter(e.target.value)} style={{...inp(false),fontSize:13}}>
+              <option value="all">{lang==='en'?'All workers':'Todos los trabajadores'}</option>
+              {workers.filter(w=>w.active).map(w=><option key={w.id} value={w.name}>{w.name}</option>)}
+            </select>
+          </div>
           <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12}}>
             <button onClick={()=>setWeekOffset(w=>w-1)} style={{padding:'7px 14px',borderRadius:8,border:'2px solid #e2e8f0',background:'transparent',color:'#64748b',cursor:'pointer',fontSize:16}}>‹</button>
             <div style={{flex:1,textAlign:'center',fontSize:13,fontWeight:600,color:'#1e293b'}}>{fmtWeek()}</div>
@@ -507,12 +528,12 @@ export default function App() {
                   <span style={{fontWeight:700,fontSize:15,color:'#16a34a'}}>${data.totalPay.toFixed(2)}</span>
                 </div>
                 {data.lines.sort((a,b)=>a.date.localeCompare(b.date)).map((r,li)=>(
-                  <div key={li} style={{display:'grid',gridTemplateColumns:'90px 1fr 50px 60px 70px',gap:6,alignItems:'center',padding:'5px 12px',fontSize:13,color:'#475569'}}>
-                    <span style={{color:'#94a3b8',fontSize:12}}>{fmtDateStr(r.date,lang)}</span>
-                    <span style={{fontWeight:500}}>📍 {r.project_city} {r.project_number}</span>
-                    <span style={{color:'#64748b',textAlign:'right'}}>{r.hours.toFixed(1)}h</span>
+                  <div key={li} style={{display:'grid',gridTemplateColumns:'90px 1fr 50px 60px 70px',gap:6,alignItems:'center',padding:'5px 12px',fontSize:13,color:'#475569',background:r.hours===0?'#fff5f5':'transparent',borderRadius:r.hours===0?6:0,border:r.hours===0?'1px solid #fee2e2':'none',marginBottom:r.hours===0?2:0}}>
+                    <span style={{color:r.hours===0?'#ef4444':'#94a3b8',fontSize:12}}>{fmtDateStr(r.date,lang)}</span>
+                    <span style={{fontWeight:500,color:r.hours===0?'#ef4444':'inherit'}}>📍 {r.project_city} {r.project_number}{r.hours===0?' ⚠️':''}</span>
+                    <span style={{color:r.hours===0?'#ef4444':'#64748b',textAlign:'right',fontWeight:r.hours===0?700:400}}>{r.hours.toFixed(1)}h</span>
                     <span style={{color:'#94a3b8',textAlign:'right',fontSize:12}}>${r.rate}/hr</span>
-                    <span style={{color:'#16a34a',fontWeight:600,textAlign:'right'}}>${r.pay.toFixed(2)}</span>
+                    <span style={{color:r.hours===0?'#ef4444':'#16a34a',fontWeight:600,textAlign:'right'}}>${r.pay.toFixed(2)}</span>
                   </div>
                 ))}
                 <div style={{display:'grid',gridTemplateColumns:'90px 1fr 50px 60px 70px',gap:6,padding:'6px 12px',fontSize:13,borderTop:'1px dashed #e2e8f0',marginTop:4}}>
@@ -541,7 +562,14 @@ export default function App() {
                   <div style={{display:'flex',alignItems:'center',gap:10}}>
                     <div style={{width:36,height:36,borderRadius:'50%',background:color+'20',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:700,color,flexShrink:0}}>{initials}</div>
                     <div>
-                      <div style={{fontSize:14,fontWeight:600,color:'#1e293b'}}>{w.name}</div>
+                      {editingWorkerName.id===w.id
+                        ?<div style={{display:'flex',alignItems:'center',gap:6}}>
+                          <input value={editingWorkerName.value} onChange={e=>setEditingWorkerName(n=>({...n,value:e.target.value}))} style={{...inp(false),padding:'4px 8px',fontSize:13,width:160}} onKeyUp={e=>{if(e.key==='Enter') updateWorkerName(w.id,editingWorkerName.value)}} />
+                          <button onClick={()=>updateWorkerName(w.id,editingWorkerName.value)} style={{...btn('#16a34a','#fff'),padding:'4px 10px',fontSize:12}}>{t.updateRate}</button>
+                          <button onClick={()=>setEditingWorkerName({id:null,value:''})} style={{...btn('transparent','#94a3b8','1px solid #e2e8f0'),padding:'4px 10px',fontSize:12}}>✕</button>
+                        </div>
+                        :<div style={{fontSize:14,fontWeight:600,color:'#1e293b',cursor:'pointer'}} onClick={()=>setEditingWorkerName({id:w.id,value:w.name})}>{w.name} ✏️</div>
+                      }
                       {editingRate.id===w.id
                         ?<div style={{display:'flex',alignItems:'center',gap:6,marginTop:4}}>
                           <input type="number" value={editingRate.value} onChange={e=>setEditingRate(r=>({...r,value:e.target.value}))} style={{...inp(false),width:70,padding:'4px 8px',fontSize:13}} />
