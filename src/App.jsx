@@ -113,7 +113,7 @@ export default function App() {
   const [payrollFilter, setPayrollFilter] = useState('all')
   const [insightsPeriod, setInsightsPeriod] = useState('month')
   const [form, setForm] = useState({
-    worker_id:'', worker_name:'', city:'', project_number:'', project_address:'',
+    worker_id:'', worker_name:'', city:'', project_number:'', project_address:'', area_sqft:'',
     date:toISO(new Date()), start:'', end:'', lunch:'0', notes:''
   })
 
@@ -170,7 +170,7 @@ export default function App() {
     const { error } = await supabase.from('reports').insert({
       company_id:COMPANY_ID, worker_id:form.worker_id, worker_name:form.worker_name,
       reporter, project_city:form.city.trim(), project_number:form.project_number.trim(),
-      project_address:form.project_address?.trim(), date:form.date, start_time:form.start,
+      project_address:form.project_address?.trim(), area_sqft:form.area_sqft?parseFloat(form.area_sqft):null, date:form.date, start_time:form.start,
       end_time:form.end, lunch_minutes:parseInt(form.lunch||0), hours, rate, pay:+(hours*rate).toFixed(2),
       tags:selectedTags.map(i=>tags[i].en), notes:form.notes
     })
@@ -409,6 +409,10 @@ export default function App() {
             <div>
               <label style={{fontSize:12,fontWeight:600,color:'#64748b',display:'block',marginBottom:4}}>{t.address}</label>
               <input value={form.project_address} onChange={e=>setForm(f=>({...f,project_address:e.target.value}))} onFocus={()=>setFocused('addr')} onBlur={()=>setFocused(null)} placeholder="e.g. 445 S State St" style={inp(focused==='addr')} />
+            </div>
+            <div>
+              <label style={{fontSize:12,fontWeight:600,color:'#64748b',display:'block',marginBottom:4}}>{lang==='en'?'Area (sq ft, optional)':'Área (pies², opcional)'}</label>
+              <input type="number" min="0" value={form.area_sqft} onChange={e=>setForm(f=>({...f,area_sqft:e.target.value}))} onFocus={()=>setFocused('area')} onBlur={()=>setFocused(null)} placeholder="e.g. 500" style={inp(focused==='area')} />
             </div>
           </div>
 
