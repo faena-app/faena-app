@@ -253,12 +253,12 @@ export default function App() {
   const filteredReports = reports.filter(r=>r.date>=payFrom&&r.date<=payTo)
   const payrollByWorker = () => {
     const bw={}
-    const filtered = payrollFilter==='all' ? filteredReports : filteredReports.filter(r=>r.worker_name===payrollFilter)
+    const filtered = payrollFilter==='all' ? filteredReports : filteredReports.filter(r=>r.worker_id===payrollFilter)
     filtered.forEach(r=>{
-      if(!bw[r.worker_name]) bw[r.worker_name]={lines:[],totalHours:0,totalPay:0,rate:r.rate}
-      bw[r.worker_name].lines.push(r)
-      bw[r.worker_name].totalHours+=r.hours
-      bw[r.worker_name].totalPay+=r.pay
+      if(!bw[r.worker_id]) bw[r.worker_id]={name:r.worker_name,lines:[],totalHours:0,totalPay:0,rate:r.rate}
+      bw[r.worker_id].lines.push(r)
+      bw[r.worker_id].totalHours+=r.hours
+      bw[r.worker_id].totalPay+=r.pay
     })
     return bw
   }
@@ -522,7 +522,7 @@ export default function App() {
             <label style={{fontSize:12,fontWeight:600,color:'#64748b',display:'block',marginBottom:4}}>{lang==='en'?'Filter by worker':'Filtrar por trabajador'}</label>
             <select value={payrollFilter} onChange={e=>setPayrollFilter(e.target.value)} style={{...inp(false),fontSize:13}}>
               <option value="all">{lang==='en'?'All workers':'Todos los trabajadores'}</option>
-              {workers.filter(w=>w.active).map(w=><option key={w.id} value={w.name}>{w.name}</option>)}
+              {workers.filter(w=>w.active).map(w=><option key={w.id} value={w.id}>{w.name}</option>)}
             </select>
           </div>
           <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12}}>
@@ -542,10 +542,10 @@ export default function App() {
           <div style={card}>
             <span style={sLabel}>{t.paySummary}</span>
             {Object.keys(pw).length===0?<p style={{color:'#94a3b8',textAlign:'center',padding:'1.5rem'}}>{t.noPay}</p>:
-            Object.entries(pw).sort((a,b)=>b[1].totalPay-a[1].totalPay).map(([name,data],wi,arr)=>(
-              <div key={name} style={{marginBottom:wi<arr.length-1?16:0,paddingBottom:wi<arr.length-1?16:0,borderBottom:wi<arr.length-1?'1px solid #f1f5f9':'none'}}>
+            Object.entries(pw).sort((a,b)=>b[1].totalPay-a[1].totalPay).map(([workerId,data],wi,arr)=>(
+              <div key={workerId} style={{marginBottom:wi<arr.length-1?16:0,paddingBottom:wi<arr.length-1?16:0,borderBottom:wi<arr.length-1?'1px solid #f1f5f9':'none'}}>
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8,background:'#f8fafc',padding:'8px 12px',borderRadius:8}}>
-                  <span style={{fontWeight:700,fontSize:14,color:'#1e293b'}}>{name}</span>
+                  <span style={{fontWeight:700,fontSize:14,color:'#1e293b'}}>{data.name}</span>
                   <span style={{fontWeight:700,fontSize:15,color:'#16a34a'}}>${data.totalPay.toFixed(2)}</span>
                 </div>
                 {data.lines.sort((a,b)=>a.date.localeCompare(b.date)).map((r,li)=>(
@@ -601,16 +601,16 @@ export default function App() {
           byProject[k].days.add(r.date)
           byProject[k].hours+=r.hours
           byProject[k].cost+=r.pay
-          byProject[k].workers.add(r.worker_name)
+          byProject[k].workers.add(r.worker_id)
         })
         const projArr = Object.values(byProject).sort((a,b)=>b.cost-a.cost)
 
         // By worker
         const byWorker = {}
         insReports.forEach(r=>{
-          if(!byWorker[r.worker_name]) byWorker[r.worker_name]={name:r.worker_name,hours:0,cost:0}
-          byWorker[r.worker_name].hours+=r.hours
-          byWorker[r.worker_name].cost+=r.pay
+          if(!byWorker[r.worker_id]) byWorker[r.worker_id]={name:r.worker_name,hours:0,cost:0}
+          byWorker[r.worker_id].hours+=r.hours
+          byWorker[r.worker_id].cost+=r.pay
         })
         const workerArr = Object.values(byWorker).sort((a,b)=>b.hours-a.hours)
         const maxWorkerHours = workerArr[0]?.hours||1
@@ -728,7 +728,7 @@ export default function App() {
           <div style={card}>
             <span style={sLabel}>{t.activeW}</span>
             {activeWorkers.map(w=>{
-              const count=reports.filter(r=>r.worker_name===w.name).length
+              const count=reports.filter(r=>r.worker_id===w.id).length
               const initials=w.name.split(' ').map(p=>p[0]).slice(0,2).join('').toUpperCase()
               const color=w.role==='supervisor'?'#d97706':'#2563eb'
               return (
@@ -776,7 +776,7 @@ export default function App() {
             <div style={card}>
               <span style={sLabel}>{t.inactiveW}</span>
               {inactiveWorkers.map(w=>{
-                const count=reports.filter(r=>r.worker_name===w.name).length
+                const count=reports.filter(r=>r.worker_id===w.id).length
                 const initials=w.name.split(' ').map(p=>p[0]).slice(0,2).join('').toUpperCase()
                 return (
                   <div key={w.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'11px 0',borderBottom:'1px solid #f1f5f9'}}>
